@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Conexion's Civilization VII Mod Manager</title>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+      default-src 'self';
+      style-src 'self' https://fonts.googleapis.com 'unsafe-inline';
+      font-src 'self' https://fonts.gstatic.com;
+      script-src 'self';
+      img-src 'self' file:;
+    "
+    />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@200;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="content">
+      <header class="header">
+        <h1>Manage Your Civilization VII Mods</h1>
+        <div class="header-buttons">
+          <button id="options-button" class="action-btn">Options</button>
+          <button
+            id="refresh-button"
+            class="action-btn"
+            title="Refresh mod list"
+          >
+            🔄
+          </button>
+          <button
+            id="open-folder-button"
+            class="action-btn"
+            title="Open mods folder"
+          >
+            📂
+          </button>
+        </div>
+      </header>
+      <div id="mods-list">Loading...</div>
+      <footer>
+        <div class="drop-zone" data-drop-target="true">
+          <div class="drop-zone-content">
+            <p class="bold" data-drop-message="primary">
+              Drop mod folder here to install
+            </p>
+            <p class="drop-zone-subtitle" data-drop-message="secondary">
+              Please extract your ZIP / 7z / RAR file before dragging
+            </p>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <!-- Templates -->
+    <template id="mod-item-template">
+      <div class="mod-item" data-mod-id="" data-mod-folder="" data-mod-state="">
+        <div class="mod-content">
+          <div class="mod-icon">
+            <img src="" alt="" />
+          </div>
+          <div class="mod-name"></div>
+          <div class="mod-author"></div>
+          <div class="mod-version"></div>
+          <div class="mod-description"></div>
+          <div class="mod-actions">
+            <button class="action-btn toggle-mod" data-action-type="toggle">
+              <span class="button-text">Enabled</span>
+            </button>
+            <button class="action-btn delete-mod" data-action-type="delete">
+              ✕
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <template id="mods-list-template">
+      <div id="installed-mods">
+        <div class="mods-grid"></div>
+      </div>
+    </template>
+
+    <template id="notification-template">
+      <div class="notification" data-notification-type="">
+        <div class="notification-content"></div>
+      </div>
+    </template>
+
+    <template id="options-dialog-template">
+      <div class="overlay">
+        <div class="dialog options-dialog">
+          <div class="dialog-header">
+            <h2>Options</h2>
+          </div>
+          <div class="dialog-content">
+            <div class="option-group">
+              <label for="mods-directory">Mods Directory:</label>
+              <div class="directory-input">
+                <input
+                  type="text"
+                  id="mods-directory"
+                  readonly
+                  placeholder="Default mods directory"
+                />
+                <button class="browse-button">Browse</button>
+              </div>
+              <p class="help-text">
+                Current path:<br /><span class="current-path"></span>
+              </p>
+              <p class="notes">
+                Disabled mods are moved to a neighboring DisableMods folder.
+              </p>
+            </div>
+          </div>
+          <div class="dialog-footer">
+            <button class="action-btn save-options">Save</button>
+            <button class="action-btn cancel-options">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>

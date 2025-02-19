@@ -1,0 +1,54 @@
+{
+  "name": "conexion-civ7-mod-manager",
+  "version": "1.0.0",
+  "description": "A mod manager for Civilization VII",
+  "main": "src/main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CivConexion/civ-7-mod-manager"
+  },
+  "keywords": [
+    "civilization-vii",
+    "mod-manager",
+    "game-mods",
+    "electron",
+    "desktop-app"
+  ],
+  "author": {
+    "name": "CivConexion",
+    "email": "199992914+CivConexion@users.noreply.github.com"
+  },
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "lint": "eslint .",
+    "test": "jest"
+  },
+  "build": {
+    "appId": "com.conexion-civ-7-mod-manager.id",
+    "productName": "Conexion's Civilization VII Mod Manager",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "icon": "src/assets/icons/win/icon.ico"
+    },
+    "mac": {
+      "icon": "src/assets/icons/mac/icon.icns"
+    },
+    "linux": {
+      "icon": "src/assets/icons/png"
+    }
+  },
+  "license": "GPL-2.0-or-later",
+  "devDependencies": {
+    "electron": "^34.2.0",
+    "electron-builder": "^25.1.8",
+    "electron-reloader": "^1.2.3"
+  },
+  "dependencies": {
+    "@electron/remote": "^2.1.2",
+    "electron-store": "^10.0.1",
+    "fast-xml-parser": "^4.5.1"
+  }
+}
