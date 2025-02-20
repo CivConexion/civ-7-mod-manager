@@ -3,7 +3,7 @@
 ![License](https://img.shields.io/github/license/CivConexion/civ-7-mod-manager)
 ![Version](https://img.shields.io/github/v/release/CivConexion/civ-7-mod-manager?include_prereleases&label=version)
 
-> ⚠️ **Current Status**: Initial release has only been tested on Windows. macOS testing and support coming soon.
+> ⚠️ **BETA SOFTWARE**: This is a pre-release version for testing purposes. Please report any issues you encounter.
 
 A simple, lightweight mod manager for Civilization VII that allows you to easily install, enable, disable, and manage your mods.
 
@@ -20,7 +20,19 @@ A simple, lightweight mod manager for Civilization VII that allows you to easily
 ### From Releases
 1. Go to the [Releases](https://github.com/CivConexion/civ-7-mod-manager/releases) page
 2. Download the latest version for your platform
-3. Run the installer
+3. Run the installer (See below if you are on Mac)
+
+### ⚠️ macOS Installation Notes
+Due to macOS "security features" (They want me to pay $99/year to 'sign' the app), you may see a message that the app is "damaged" or "can't be opened". To resolve this:
+
+1. After downloading and installing the app, open Terminal
+2. Run this command to remove the quarantine attribute:
+   ```bash
+   xattr -d com.apple.quarantine /Applications/Conexion\'s\ Civilization\ VII\ Mod\ Manager.app
+   ```
+   (Or drag the app file into Terminal after typing `xattr -d com.apple.quarantine `)
+
+3. You can also right-click the app → Open, then click "Open" in the security dialog
 
 ### From Source
 ```bash
