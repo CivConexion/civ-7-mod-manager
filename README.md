@@ -30,9 +30,6 @@ Due to macOS "security features" (They want me to pay $99/year to 'sign' the app
    ```bash
    xattr -d com.apple.quarantine /Applications/Conexion\'s\ Civilization\ VII\ Mod\ Manager.app
    ```
-   (Or drag the app file into Terminal after typing `xattr -d com.apple.quarantine `)
-
-3. You can also right-click the app → Open, then click "Open" in the security dialog
 
 ### From Source
 ```bash
