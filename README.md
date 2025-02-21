@@ -27,9 +27,10 @@ Due to macOS "security features" (They want me to pay $99/year to 'sign' the app
 
 1. After downloading and installing the app, open Terminal
 2. Run this command to remove the quarantine attribute:
-   ```bash
-   xattr -d com.apple.quarantine /Applications/Conexion\'s\ Civilization\ VII\ Mod\ Manager.app
-   ```
+
+```bash
+xattr -d com.apple.quarantine /Applications/Conexion\'s\ Civilization\ VII\ Mod\ Manager.app
+```
 
 ### From Source
 ```bash
@@ -85,6 +86,11 @@ The mod manager provides some additional features for mod creators to enhance th
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+### Current Needs ⚠️
+- Someone with a Steam Deck to add support and test (Or someone who can tell me the directory, and test the app)
+- Someone who plays on Debian/Ubuntu and/or Arch for the same reason
+- Someone who wants to give me $99 to sign the macOS app (Kidding, but also...?)
+
 ## License
 
 This project is licensed under the GNU General Public License v2.0 or later - see the [LICENSE](LICENSE) file for details.
@@ -92,6 +98,10 @@ This project is licensed under the GNU General Public License v2.0 or later - se
 ## Acknowledgments
 
 - (Reluctantly) Built with [Electron](https://www.electronjs.org/) - The easiest way to build cross-platform desktop applications
+- The gear icon was based on [Gear Vector](https://www.vecteezy.com/free-vector/gear) by goff.brian at Vecteezy
+- Background image: [Bazaar of the Silk Mercers, Cairo](https://www.rawpixel.com/image/425173/free-illustration-image-egypt-city-architecture) - By David Robers (1796-1864) - Public Domain
+- Application Font: [Cormorant Garamond](https://github.com/CatharsisFonts/Cormorant) by [Christian Thalmann](https://github.com/CatharsisFonts)
+- I should add cool background music, but I'll save your ears.
 
 ## Support
 

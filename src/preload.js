@@ -9,24 +9,58 @@ const { shell } = require("electron");
 const MODS_FOLDER = "Mods";
 const DISABLED_MODS_FOLDER = "DisabledMods";
 
-// Utility to find a .modinfo file in a directory
 const findModInfoFile = async (dirPath) => {
-  const files = await fs.readdir(dirPath);
-  return files.find((file) => file.endsWith(".modinfo"));
+  try {
+    // Check root directory first
+    const rootFiles = await fs.readdir(dirPath);
+    const rootModInfo = rootFiles.find((file) => file.endsWith(".modinfo"));
+    if (rootModInfo) {
+      return {
+        path: path.join(dirPath, rootModInfo),
+        inSubfolder: false,
+      };
+    }
+
+    // Check immediate subdirectories
+    for (const item of rootFiles) {
+      const subPath = path.join(dirPath, item);
+      const stats = await fs.stat(subPath);
+      if (stats.isDirectory()) {
+        const subFiles = await fs.readdir(subPath);
+        const subModInfo = subFiles.find((file) => file.endsWith(".modinfo"));
+        if (subModInfo) {
+          return {
+            path: path.join(subPath, subModInfo),
+            inSubfolder: true,
+            subfolderName: item,
+          };
+        }
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error("Error in findModInfoFile:", error);
+    return null;
+  }
 };
 
-// Parse a .modinfo XML file
-const parseModInfo = async (filePath) => {
+const parseModInfo = async (modInfoResult) => {
+  if (!modInfoResult) return null;
+
   try {
-    const xmlData = await fs.readFile(filePath, "utf8");
+    const xmlData = await fs.readFile(modInfoResult.path, "utf8");
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: "_",
     });
     const result = parser.parse(xmlData);
-    return result.Mod;
+    return {
+      ...result.Mod,
+      inSubfolder: modInfoResult.inSubfolder,
+      subfolderName: modInfoResult.subfolderName,
+    };
   } catch (error) {
-    console.error(`Error parsing ${filePath}:`, error);
+    console.error(`Error parsing modinfo:`, error);
     return null;
   }
 };
@@ -177,14 +211,18 @@ const scanModsInDirectory = async (directory, enabled) => {
       const folderPath = path.join(directory, folder);
       const stats = await fs.stat(folderPath);
       if (stats.isDirectory()) {
-        const modInfoFile = await findModInfoFile(folderPath);
-        if (modInfoFile) {
-          const modInfoPath = path.join(folderPath, modInfoFile);
-          const modInfo = await parseModInfo(modInfoPath);
-          const localization = await parseModInfoText(folderPath);
-          const iconPath = await findModIcon(folderPath);
-
+        const modInfoResult = await findModInfoFile(folderPath);
+        if (modInfoResult) {
+          const modInfo = await parseModInfo(modInfoResult);
           if (modInfo) {
+            // Use the appropriate path for icon and localization based on structure
+            const basePath = modInfoResult.inSubfolder
+              ? path.join(folderPath, modInfoResult.subfolderName)
+              : folderPath;
+
+            const localization = await parseModInfoText(basePath);
+            const iconPath = await findModIcon(basePath);
+
             const name = modInfo.Properties.Name;
             const description = modInfo.Properties.Description;
 
@@ -202,9 +240,10 @@ const scanModsInDirectory = async (directory, enabled) => {
                 modInfo.ModManager?.Description || localizedDescription,
               authors: modInfo.Properties.Authors,
               affectsSavedGames: modInfo.Properties.AffectsSavedGames === "1",
-              modInfoFile,
               icon: iconPath,
               enabled,
+              inSubfolder: modInfoResult.inSubfolder,
+              subfolderName: modInfoResult.subfolderName,
             });
           }
         }
@@ -212,7 +251,7 @@ const scanModsInDirectory = async (directory, enabled) => {
     }
   } catch (error) {
     if (error.code === "ENOENT") {
-      return []; // Return an empty array if the directory doesn't exist
+      return [];
     }
     throw error;
   }

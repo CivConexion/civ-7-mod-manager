@@ -230,7 +230,6 @@ const checkForModInfo = async (entry) => {
       const hasModInfo = results.some((result) =>
         result.name.endsWith(".modinfo")
       );
-
       if (hasModInfo) {
         resolve({
           hasModInfo: true,
@@ -240,28 +239,34 @@ const checkForModInfo = async (entry) => {
         return;
       }
 
-      // If no modinfo in root, check first subfolder
+      // Check immediate subfolders
       const subfolders = results.filter((result) => result.isDirectory);
-      if (subfolders.length === 1) {
-        const subfolderReader = subfolders[0].createReader();
-        subfolderReader.readEntries((subResults) => {
-          const hasModInfoInSubfolder = subResults.some((result) =>
-            result.name.endsWith(".modinfo")
-          );
-          resolve({
-            hasModInfo: hasModInfoInSubfolder,
-            entry: hasModInfoInSubfolder ? subfolders[0] : entry,
-            useOriginalName: hasModInfoInSubfolder,
-            originalName: entry.name,
+      for (const subfolder of subfolders) {
+        const subReader = subfolder.createReader();
+        await new Promise((resolveSubfolder) => {
+          subReader.readEntries((subResults) => {
+            const hasModInfoInSubfolder = subResults.some((result) =>
+              result.name.endsWith(".modinfo")
+            );
+            if (hasModInfoInSubfolder) {
+              resolve({
+                hasModInfo: true,
+                entry,
+                useOriginalName: false,
+              });
+              resolveSubfolder();
+              return;
+            }
+            resolveSubfolder();
           });
         });
-      } else {
-        resolve({
-          hasModInfo: false,
-          entry,
-          useOriginalName: false,
-        });
       }
+
+      resolve({
+        hasModInfo: false,
+        entry,
+        useOriginalName: false,
+      });
     });
   });
 };
