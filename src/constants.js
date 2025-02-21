@@ -28,7 +28,7 @@ exports.APP_CONSTANTS = {
   },
 
   MESSAGES: {
-    MOD_INSTALLED: "Mod installed successfully",
+    MOD_INSTALLED: (modName) => `Mod installed successfully: ${modName}`,
     INSTALLATION_CANCELLED: "Installation cancelled",
     ERROR_REMOVING_EXISTING: "Failed to remove existing mod",
     MOD_ENABLED: "Mod enabled successfully",

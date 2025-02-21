@@ -404,57 +404,95 @@ const initializeDropZone = () => {
     );
   });
 
-  // Handle drop event
   dropZone.addEventListener(APP_CONSTANTS.EVENTS.DRAG.DROP, async (e) => {
-    for (const item of e.dataTransfer.items) {
-      if (item.kind !== "file") continue;
+    try {
+      e.preventDefault();
+      e.stopPropagation();
 
-      const file = item.getAsFile();
-      const fileName = file.name.toLowerCase();
+      // Get all items from the drop event
+      const entries = [];
+      for (let i = 0; i < e.dataTransfer.items.length; i++) {
+        const item = e.dataTransfer.items[i];
+        if (item.kind === "file") {
+          const entry = item.webkitGetAsEntry();
+          if (entry) {
+            entries.push(entry);
+          }
+        }
+      }
 
-      if (
-        APP_CONSTANTS.SUPPORTED_ARCHIVES.some((ext) => fileName.endsWith(ext))
-      ) {
-        utils.showNotification(
-          APP_CONSTANTS.MESSAGES.ERROR_EXTRACT_FIRST,
-          APP_CONSTANTS.NOTIFICATION_TYPES.ERROR
-        );
+      if (entries.length === 0) {
+        console.log("No valid entries found");
         return;
       }
 
-      const entry = item.webkitGetAsEntry();
-      if (!entry?.isDirectory) {
-        utils.showNotification(
-          APP_CONSTANTS.MESSAGES.ERROR_FOLDER_ONLY,
-          APP_CONSTANTS.NOTIFICATION_TYPES.ERROR
-        );
-        continue;
+      // Process each entry
+      for (const entry of entries) {
+        try {
+          // Check if it's a directory
+          if (!entry.isDirectory) {
+            utils.showNotification(
+              APP_CONSTANTS.MESSAGES.ERROR_FOLDER_ONLY,
+              APP_CONSTANTS.NOTIFICATION_TYPES.ERROR
+            );
+            continue;
+          }
+
+          // Check if it's an archive
+          if (
+            APP_CONSTANTS.SUPPORTED_ARCHIVES.some((ext) =>
+              entry.name.toLowerCase().endsWith(ext)
+            )
+          ) {
+            utils.showNotification(
+              APP_CONSTANTS.MESSAGES.ERROR_EXTRACT_FIRST,
+              APP_CONSTANTS.NOTIFICATION_TYPES.ERROR
+            );
+            continue;
+          }
+
+          const directoryResult = await modManager.handleDirectoryEntry(entry);
+
+          if (!directoryResult || !directoryResult.entry) {
+            utils.showNotification(
+              `Failed to process directory: ${entry.name}`,
+              APP_CONSTANTS.NOTIFICATION_TYPES.ERROR
+            );
+            continue;
+          }
+
+          const files = await utils.getAllFiles(directoryResult.entry);
+
+          const finalModName = directoryResult.useOriginalName
+            ? directoryResult.originalName
+            : directoryResult.entry.name;
+
+          await window.api.validateAndInstallMod({
+            folderName: finalModName,
+            files,
+          });
+
+          utils.showNotification(
+            `Mod installed successfully: ${entry.name}`,
+            APP_CONSTANTS.NOTIFICATION_TYPES.SUCCESS
+          );
+        } catch (itemError) {
+          console.error("Error processing entry:", entry.name, itemError);
+          utils.showNotification(
+            `Error processing mod ${entry.name}: ${itemError.message}`,
+            APP_CONSTANTS.NOTIFICATION_TYPES.ERROR
+          );
+        }
       }
 
-      try {
-        const {
-          entry: validEntry,
-          useOriginalName,
-          originalName,
-        } = await modManager.handleDirectoryEntry(entry);
-
-        const files = await utils.getAllFiles(validEntry);
-        await window.api.validateAndInstallMod({
-          folderName: useOriginalName ? originalName : validEntry.name,
-          files,
-        });
-
-        utils.showNotification(
-          APP_CONSTANTS.MESSAGES.MOD_INSTALLED,
-          APP_CONSTANTS.NOTIFICATION_TYPES.SUCCESS
-        );
-        await modManager.scanAndDisplayMods();
-      } catch (error) {
-        utils.showNotification(
-          error.message,
-          APP_CONSTANTS.NOTIFICATION_TYPES.ERROR
-        );
-      }
+      // Refresh the mod list once after all mods are processed
+      await modManager.scanAndDisplayMods();
+    } catch (error) {
+      console.error("Error in drop handler:", error);
+      utils.showNotification(
+        "Error processing dropped items",
+        APP_CONSTANTS.NOTIFICATION_TYPES.ERROR
+      );
     }
   });
 };
