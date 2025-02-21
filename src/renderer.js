@@ -27,24 +27,62 @@ const utils = {
     const files = [];
 
     const traverseDirectory = async (entry, currentPath) => {
-      return new Promise((resolve, reject) => {
+      return new Promise(async (resolve, reject) => {
         if (entry.isFile) {
-          entry.file((file) => {
-            files.push({ path: currentPath, file });
-            resolve();
-          }, reject);
+          // Handle FileSystem API entry
+          if (typeof entry.file === "function") {
+            entry.file((file) => {
+              files.push({ path: currentPath, file });
+              resolve();
+            }, reject);
+          }
+          // Handle custom entry
+          else {
+            try {
+              const response = await fetch(`file://${entry.path}`);
+              const blob = await response.blob();
+              const file = new File([blob], entry.name, {
+                type: blob.type,
+              });
+              files.push({ path: currentPath, file });
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          }
         } else if (entry.isDirectory) {
-          const dirReader = entry.createReader();
-          dirReader.readEntries(async (entries) => {
-            const promises = entries.map((entry) =>
-              traverseDirectory(
-                entry,
-                currentPath ? `${currentPath}/${entry.name}` : entry.name
-              )
-            );
-            await Promise.all(promises);
-            resolve();
-          }, reject);
+          try {
+            // Handle both FileSystem API and custom entries
+            const reader = entry.createReader
+              ? entry.createReader()
+              : {
+                  readEntries: (callback) => {
+                    window.api
+                      .readDirectory(entry.path)
+                      .then((entries) => callback(entries))
+                      .catch((error) => reject(error));
+                  },
+                };
+
+            reader.readEntries(async (entries) => {
+              try {
+                const promises = entries.map((entry) =>
+                  traverseDirectory(
+                    entry,
+                    currentPath ? `${currentPath}/${entry.name}` : entry.name
+                  )
+                );
+                await Promise.all(promises);
+                resolve();
+              } catch (error) {
+                reject(error);
+              }
+            });
+          } catch (error) {
+            reject(error);
+          }
+        } else {
+          resolve();
         }
       });
     };
@@ -223,51 +261,145 @@ const modManager = {
 };
 
 const checkForModInfo = async (entry) => {
-  return new Promise((resolve) => {
-    const dirReader = entry.createReader();
-    dirReader.readEntries(async (results) => {
-      // First check if .modinfo exists in the root
-      const hasModInfo = results.some((result) =>
-        result.name.endsWith(".modinfo")
+  return new Promise(async (resolve) => {
+    const checkDirectory = async (dirPath, rootPath) => {
+      const entries = await window.api.readDirectory(dirPath);
+
+      // First check if .modinfo exists in the current directory
+      const hasModInfo = entries.some((entry) =>
+        entry.name.endsWith(".modinfo")
       );
       if (hasModInfo) {
-        resolve({
-          hasModInfo: true,
-          entry,
-          useOriginalName: false,
-        });
-        return;
+        return {
+          found: true,
+          path: dirPath,
+          rootPath: rootPath,
+        };
       }
 
       // Check immediate subfolders
-      const subfolders = results.filter((result) => result.isDirectory);
-      for (const subfolder of subfolders) {
-        const subReader = subfolder.createReader();
-        await new Promise((resolveSubfolder) => {
-          subReader.readEntries((subResults) => {
-            const hasModInfoInSubfolder = subResults.some((result) =>
-              result.name.endsWith(".modinfo")
-            );
-            if (hasModInfoInSubfolder) {
-              resolve({
-                hasModInfo: true,
-                entry,
-                useOriginalName: false,
-              });
-              resolveSubfolder();
-              return;
-            }
-            resolveSubfolder();
-          });
-        });
+      for (const entry of entries) {
+        if (entry.isDirectory) {
+          const result = await checkDirectory(entry.path, rootPath);
+          if (result.found) {
+            return result;
+          }
+        }
       }
 
-      resolve({
-        hasModInfo: false,
-        entry,
-        useOriginalName: false,
+      return { found: false, path: null, rootPath: null };
+    };
+
+    if (entry.isFile) {
+      // Handle archive file
+      const buffer = await new Promise((resolve) => {
+        entry.file((file) => {
+          file.arrayBuffer().then(resolve);
+        });
       });
-    });
+
+      const { modPath, cleanup } = await window.api.handleArchiveFile(
+        buffer,
+        entry.name
+      );
+
+      try {
+        const result = await checkDirectory(modPath, modPath);
+        if (result.found) {
+          resolve({
+            hasModInfo: true,
+            entry: {
+              name: await window.api.pathBasename(result.rootPath),
+              isDirectory: true,
+              path: result.rootPath,
+              modInfoPath: result.path,
+              createReader: () => ({
+                readEntries: async (callback) => {
+                  try {
+                    const entries = await window.api.readDirectory(
+                      result.rootPath
+                    );
+                    callback(
+                      entries.map((entry) => ({
+                        ...entry,
+                        createReader: entry.isDirectory
+                          ? () => ({
+                              readEntries: async (cb) => {
+                                const subEntries =
+                                  await window.api.readDirectory(entry.path);
+                                cb(subEntries);
+                              },
+                            })
+                          : undefined,
+                      }))
+                    );
+                  } catch (error) {
+                    console.error("Error reading entries:", error);
+                    callback([]);
+                  }
+                },
+              }),
+            },
+            cleanup,
+          });
+        } else {
+          cleanup();
+          resolve({
+            hasModInfo: false,
+            entry: null,
+            cleanup: () => {},
+          });
+        }
+      } catch (error) {
+        cleanup();
+        resolve({
+          hasModInfo: false,
+          entry: null,
+          cleanup: () => {},
+        });
+      }
+    } else {
+      // Handle directory
+      const result = await checkDirectory(entry.path, entry.path);
+      resolve({
+        hasModInfo: result.found,
+        entry: result.found
+          ? {
+              name: await window.api.pathBasename(result.rootPath),
+              isDirectory: true,
+              path: result.rootPath,
+              modInfoPath: result.path,
+              createReader: () => ({
+                readEntries: async (callback) => {
+                  try {
+                    const entries = await window.api.readDirectory(
+                      result.rootPath
+                    );
+                    callback(
+                      entries.map((entry) => ({
+                        ...entry,
+                        createReader: entry.isDirectory
+                          ? () => ({
+                              readEntries: async (cb) => {
+                                const subEntries =
+                                  await window.api.readDirectory(entry.path);
+                                cb(subEntries);
+                              },
+                            })
+                          : undefined,
+                      }))
+                    );
+                  } catch (error) {
+                    console.error("Error reading entries:", error);
+                    callback([]);
+                  }
+                },
+              }),
+            }
+          : null,
+        cleanup: () => {},
+      });
+    }
   });
 };
 
@@ -404,6 +536,7 @@ const initializeDropZone = () => {
     );
   });
 
+  // Handle drop event
   dropZone.addEventListener(APP_CONSTANTS.EVENTS.DRAG.DROP, async (e) => {
     try {
       e.preventDefault();
@@ -426,56 +559,132 @@ const initializeDropZone = () => {
         return;
       }
 
-      // Process each entry
       for (const entry of entries) {
         try {
-          // Check if it's a directory
-          if (!entry.isDirectory) {
-            utils.showNotification(
-              APP_CONSTANTS.MESSAGES.ERROR_FOLDER_ONLY,
-              APP_CONSTANTS.NOTIFICATION_TYPES.ERROR
-            );
-            continue;
-          }
+          // Handle archive files
 
-          // Check if it's an archive
+          // In renderer.js, update the archive handling section:
+
           if (
+            entry.isFile &&
             APP_CONSTANTS.SUPPORTED_ARCHIVES.some((ext) =>
               entry.name.toLowerCase().endsWith(ext)
             )
           ) {
-            utils.showNotification(
-              APP_CONSTANTS.MESSAGES.ERROR_EXTRACT_FIRST,
-              APP_CONSTANTS.NOTIFICATION_TYPES.ERROR
-            );
-            continue;
+            await new Promise((resolve, reject) => {
+              const handleArchiveFile = async () => {
+                try {
+                  let buffer;
+                  // Handle FileSystem API entry
+                  if (typeof entry.file === "function") {
+                    const file = await new Promise((resolve, reject) => {
+                      entry.file(resolve, reject);
+                    });
+                    buffer = await file.arrayBuffer();
+                  }
+                  // Handle regular file
+                  else {
+                    const response = await fetch(`file://${entry.path}`);
+                    buffer = await response.arrayBuffer();
+                  }
+
+                  // Handle the archive through the preload API
+                  const { modFolder, modPath, cleanup } =
+                    await window.api.handleArchiveFile(buffer, entry.name);
+
+                  try {
+                    const directoryEntry = {
+                      name: modFolder,
+                      isDirectory: true,
+                      path: modPath,
+                      createReader: () => ({
+                        readEntries: async (callback) => {
+                          try {
+                            const entries = await window.api.readDirectory(
+                              modPath
+                            );
+                            callback(entries);
+                          } catch (error) {
+                            console.error("Error reading entries:", error);
+                            callback([]);
+                          }
+                        },
+                      }),
+                    };
+
+                    const directoryResult =
+                      await modManager.handleDirectoryEntry(directoryEntry);
+
+                    if (directoryResult) {
+                      const files = await utils.getAllFiles(
+                        directoryResult.entry
+                      );
+                      await window.api.validateAndInstallMod({
+                        folderName: directoryResult.useOriginalName
+                          ? directoryResult.originalName
+                          : directoryResult.entry.name,
+                        files,
+                      });
+
+                      utils.showNotification(
+                        APP_CONSTANTS.MESSAGES.MOD_INSTALLED(entry.name),
+                        APP_CONSTANTS.NOTIFICATION_TYPES.SUCCESS
+                      );
+                    }
+                  } finally {
+                    cleanup();
+                  }
+
+                  resolve();
+                } catch (error) {
+                  console.error("Error processing archive:", error);
+                  utils.showNotification(
+                    `Error processing archive ${entry.name}: ${error.message}`,
+                    APP_CONSTANTS.NOTIFICATION_TYPES.ERROR
+                  );
+                  reject(error);
+                }
+              };
+
+              handleArchiveFile().catch(reject);
+            });
           }
 
-          const directoryResult = await modManager.handleDirectoryEntry(entry);
+          // Handle directories
+          else if (entry.isDirectory) {
+            const directoryResult = await modManager.handleDirectoryEntry(
+              entry
+            );
+            if (!directoryResult || !directoryResult.entry) {
+              utils.showNotification(
+                `Failed to process directory: ${entry.name}`,
+                APP_CONSTANTS.NOTIFICATION_TYPES.ERROR
+              );
+              continue;
+            }
 
-          if (!directoryResult || !directoryResult.entry) {
+            const files = await utils.getAllFiles(directoryResult.entry);
+            const finalModName = directoryResult.useOriginalName
+              ? directoryResult.originalName
+              : directoryResult.entry.name;
+
+            await window.api.validateAndInstallMod({
+              folderName: finalModName,
+              files,
+            });
+
             utils.showNotification(
-              `Failed to process directory: ${entry.name}`,
+              APP_CONSTANTS.MESSAGES.MOD_INSTALLED(entry.name),
+              APP_CONSTANTS.NOTIFICATION_TYPES.SUCCESS
+            );
+          }
+          // Handle unsupported files
+          else {
+            utils.showNotification(
+              APP_CONSTANTS.MESSAGES.ERROR_FOLDER_ONLY,
               APP_CONSTANTS.NOTIFICATION_TYPES.ERROR
             );
-            continue;
           }
-
-          const files = await utils.getAllFiles(directoryResult.entry);
-
-          const finalModName = directoryResult.useOriginalName
-            ? directoryResult.originalName
-            : directoryResult.entry.name;
-
-          await window.api.validateAndInstallMod({
-            folderName: finalModName,
-            files,
-          });
-
-          utils.showNotification(
-            `Mod installed successfully: ${entry.name}`,
-            APP_CONSTANTS.NOTIFICATION_TYPES.SUCCESS
-          );
         } catch (itemError) {
           console.error("Error processing entry:", entry.name, itemError);
           utils.showNotification(

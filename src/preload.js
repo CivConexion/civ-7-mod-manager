@@ -1,10 +1,12 @@
 const { contextBridge, ipcRenderer } = require("electron");
-const { APP_CONSTANTS } = require("./constants.js");
-const path = require("path");
-const fs = require("fs").promises;
-const { XMLParser } = require("fast-xml-parser");
-const os = require("os");
 const { shell } = require("electron");
+const { APP_CONSTANTS } = require("./constants.js");
+const { XMLParser } = require("fast-xml-parser");
+const sevenZip = require("7zip-min");
+const path = require("path");
+const tmp = require("tmp");
+const fs = require("fs").promises;
+const os = require("os");
 
 const MODS_FOLDER = "Mods";
 const DISABLED_MODS_FOLDER = "DisabledMods";
@@ -258,6 +260,24 @@ const scanModsInDirectory = async (directory, enabled) => {
   return mods;
 };
 
+const extractArchive = (archivePath) => {
+  return new Promise((resolve, reject) => {
+    // Create temporary directory
+    tmp.dir({ unsafeCleanup: true }, (err, tempPath, cleanup) => {
+      if (err) return reject(err);
+
+      sevenZip.unpack(archivePath, tempPath, (err) => {
+        if (err) {
+          cleanup();
+          return reject(err);
+        }
+
+        resolve({ tempPath, cleanup });
+      });
+    });
+  });
+};
+
 // Expose APIs to the renderer process
 contextBridge.exposeInMainWorld("APP_CONSTANTS", APP_CONSTANTS);
 contextBridge.exposeInMainWorld("api", {
@@ -320,6 +340,72 @@ contextBridge.exposeInMainWorld("api", {
       throw error;
     }
   },
+
+  handleArchiveFile: async (fileBuffer, fileName) => {
+    try {
+      const tempPath = path.join(os.tmpdir(), fileName);
+      await fs.writeFile(tempPath, Buffer.from(fileBuffer));
+
+      const { tempPath: extractedPath, cleanup } = await extractArchive(
+        tempPath
+      );
+
+      // Get contents of extracted directory
+      const contents = await fs.readdir(extractedPath);
+
+      // Find first directory
+      let modFolder = null;
+      for (const item of contents) {
+        const itemPath = path.join(extractedPath, item);
+        const stats = await fs.stat(itemPath);
+        if (stats.isDirectory()) {
+          modFolder = item;
+          break;
+        }
+      }
+
+      if (!modFolder) {
+        cleanup();
+        throw new Error("No valid mod folder found in archive");
+      }
+
+      const modPath = path.join(extractedPath, modFolder);
+
+      return {
+        modFolder,
+        modPath,
+        extractedPath,
+        cleanup,
+      };
+    } catch (error) {
+      console.error("Archive handling error:", error);
+      throw error;
+    }
+  },
+
+  readFile: async (filePath) => {
+    const content = await fs.readFile(filePath);
+    return content;
+  },
+
+  readDirectory: async (dirPath) => {
+    const files = await fs.readdir(dirPath);
+    const entries = await Promise.all(
+      files.map(async (file) => {
+        const filePath = path.join(dirPath, file);
+        const stats = await fs.stat(filePath);
+        return {
+          name: file,
+          isDirectory: stats.isDirectory(),
+          isFile: stats.isFile(),
+          path: filePath,
+        };
+      })
+    );
+    return entries;
+  },
+
+  pathBasename: (filepath) => path.basename(filepath),
 
   validateAndInstallMod: async (data) => {
     try {
