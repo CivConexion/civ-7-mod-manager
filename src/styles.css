@@ -178,6 +178,13 @@ hr {
   color: var(--accent);
 }
 
+.drop-zone.installing {
+  pointer-events: none;
+  opacity: 0.9;
+  cursor: wait;
+  background: var(--bg-primary-transparent);
+}
+
 /*
 =======================
  Mods Grid

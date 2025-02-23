@@ -42,6 +42,21 @@ exports.APP_CONSTANTS = {
     ERROR_FOLDER_ONLY: "Please drop a folder, not a file",
   },
 
+  ARCHIVE_ERRORS: {
+    NO_TOOL_WINDOWS:
+      "No suitable extraction tool found.\n\n" +
+      "For .zip files, Windows built-in support should work.\n" +
+      "For other formats, please install 7-Zip or WinRAR.",
+    NO_TOOL_UNIX:
+      "No suitable extraction tool found.\n\n" +
+      "Please install one of the following:\n" +
+      "• unzip (for .zip files)\n" +
+      "• 7z (for multiple archive formats)\n" +
+      "• tar (for .tar.gz files)",
+    UNSUPPORTED_FORMAT: (ext) => `Unsupported archive format: ${ext}`,
+    EXTRACTION_FAILED: (error) => `Archive extraction failed: ${error}`,
+  },
+
   SUPPORTED_ARCHIVES: [".zip", ".rar", ".7z"],
 
   TIMEOUTS: {

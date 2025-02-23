@@ -1,6 +1,6 @@
 {
   "name": "conexion-civ7-mod-manager",
-  "version": "0.9.3-beta",
+  "version": "0.9.4-beta",
   "description": "A mod manager for Civilization VII",
   "main": "src/main.js",
   "repository": {
@@ -27,17 +27,39 @@
   "build": {
     "appId": "com.conexion-civ-7-mod-manager.id",
     "productName": "Conexion's Civilization VII Mod Manager",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/7zip-bin/**/*"
+    ],
     "directories": {
       "output": "dist"
     },
+    "files": [
+      "**/*"
+    ],
     "win": {
-      "icon": "src/assets/icons/win/icon.ico"
+      "icon": "src/assets/icons/win/icon.ico",
+      "target": [
+        "nsis"
+      ]
     },
     "mac": {
-      "icon": "src/assets/icons/mac/icon.icns"
+      "icon": "src/assets/icons/mac/icon.icns",
+      "target": [
+        "dmg"
+      ]
     },
     "linux": {
-      "icon": "src/assets/icons/png"
+      "icon": "src/assets/icons/png",
+      "target": [
+        "AppImage"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
   },
   "license": "GPL-2.0-or-later",
@@ -48,7 +70,6 @@
   },
   "dependencies": {
     "@electron/remote": "^2.1.2",
-    "7zip-min": "^2.0.0",
     "electron-store": "^10.0.1",
     "fast-xml-parser": "^4.5.1",
     "tmp": "^0.2.3"

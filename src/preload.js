@@ -2,7 +2,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 const { shell } = require("electron");
 const { APP_CONSTANTS } = require("./constants.js");
 const { XMLParser } = require("fast-xml-parser");
-const sevenZip = require("7zip-min");
+const ArchiveHandler = require("./archiveUtils");
 const path = require("path");
 const tmp = require("tmp");
 const fs = require("fs").promises;
@@ -260,30 +260,18 @@ const scanModsInDirectory = async (directory, enabled) => {
   return mods;
 };
 
-const extractArchive = (archivePath) => {
-  return new Promise((resolve, reject) => {
-    // Create temporary directory
-    tmp.dir({ unsafeCleanup: true }, (err, tempPath, cleanup) => {
-      if (err) return reject(err);
-
-      sevenZip.unpack(archivePath, tempPath, (err) => {
-        if (err) {
-          cleanup();
-          return reject(err);
-        }
-
-        resolve({ tempPath, cleanup });
-      });
-    });
-  });
-};
-
 // Expose APIs to the renderer process
 contextBridge.exposeInMainWorld("APP_CONSTANTS", APP_CONSTANTS);
 contextBridge.exposeInMainWorld("api", {
   minimizeWindow: () => ipcRenderer.send("minimize-window"),
   maximizeWindow: () => ipcRenderer.send("maximize-window"),
   closeWindow: () => ipcRenderer.send("close-window"),
+
+  path: {
+    basename: (filepath) => path.basename(filepath),
+    dirname: (filepath) => path.dirname(filepath),
+    join: (...paths) => path.join(...paths),
+  },
 
   getModsPath,
   getUsername: () => getUsername(),
@@ -343,43 +331,27 @@ contextBridge.exposeInMainWorld("api", {
 
   handleArchiveFile: async (fileBuffer, fileName) => {
     try {
-      const tempPath = path.join(os.tmpdir(), fileName);
-      await fs.writeFile(tempPath, Buffer.from(fileBuffer));
+      // Get the name without extension
+      const modName = path.basename(fileName, path.extname(fileName));
+      const modsPath = await getModsPath();
+      const modPath = path.join(modsPath, modName);
+      const archivePath = path.join(os.tmpdir(), fileName);
 
-      const { tempPath: extractedPath, cleanup } = await extractArchive(
-        tempPath
-      );
+      // Write the buffer to a temporary file
+      await fs.writeFile(archivePath, Buffer.from(fileBuffer));
 
-      // Get contents of extracted directory
-      const contents = await fs.readdir(extractedPath);
+      // Extract directly to the mods folder
+      await ArchiveHandler.extractArchive(archivePath, modPath);
 
-      // Find first directory
-      let modFolder = null;
-      for (const item of contents) {
-        const itemPath = path.join(extractedPath, item);
-        const stats = await fs.stat(itemPath);
-        if (stats.isDirectory()) {
-          modFolder = item;
-          break;
-        }
-      }
-
-      if (!modFolder) {
-        cleanup();
-        throw new Error("No valid mod folder found in archive");
-      }
-
-      const modPath = path.join(extractedPath, modFolder);
+      // Delete the temporary archive file
+      await fs.unlink(archivePath);
 
       return {
-        modFolder,
         modPath,
-        extractedPath,
-        cleanup,
+        cleanup: () => {}, // No cleanup needed since we extracted directly
       };
     } catch (error) {
-      console.error("Archive handling error:", error);
-      throw error;
+      throw new Error(`Archive extraction failed: ${error.message}`);
     }
   },
 
@@ -412,25 +384,12 @@ contextBridge.exposeInMainWorld("api", {
       const modsPath = await getModsPath();
       const modPath = path.join(modsPath, data.folderName);
 
-      // Check both enabled and disabled mods folders
-      const disabledModsPath = await getDisabledModsPath();
-      const modEnabled = path.join(modsPath, data.folderName);
-      const modDisabled = path.join(disabledModsPath, data.folderName);
-
+      // Check if the mod already exists
       try {
-        await fs.access(modEnabled);
+        await fs.access(modPath);
         throw new Error("Mod already exists");
       } catch (error) {
-        if (error.message !== "Mod already exists") {
-          try {
-            await fs.access(modDisabled);
-            throw new Error("Mod already exists");
-          } catch (subError) {
-            if (subError.message === "Mod already exists") {
-              throw subError;
-            }
-          }
-        } else {
+        if (error.message !== "Mod already exists" && error.code !== "ENOENT") {
           throw error;
         }
       }
